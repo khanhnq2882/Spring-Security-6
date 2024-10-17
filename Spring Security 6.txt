@@ -1,0 +1,56 @@
+* Luồng của Spring Security
+- Spring Security Filters : Những bộ lọc chặn từng yêu cầu và làm việc cùng nhau để xác định xem có cần xác thực hay không. Nếu cần thì sẽ điều hướng đến trang đăng
+nhập hoặc sử dụng thông tin đã lưu trong lần xác thực đầu tiên
+- Authentication : Các bộ lọc như UsernamePasswordAuthenticationFilter sẽ trích xuất username và password từ HTTP Request để tạo ra đối tượng Authentication. Đây là 
+tiêu chuẩn cốt lõi để lưu trữ thông tin người dùng đã xác thực trong Spring Security
+- AuthenticationManager : Khi nhận được yêu cầu từ bộ lọc, nó ủy quyền việc xác thực thông tin người dùng cho AuthenticationProvider hiện có. AuthenticationManager chịu
+trách nhiệm quản lý tất cả AuthenticationProvider hiện có
+- AuthenticationProvider : AuthenticationProvider có tất cả logic cốt lõi để xác thực thông tin người dùng
+- UserDetailsManager/UserDetailsService : Giúp truy xuất, tạo, cập nhật và xóa thông tin người dùng từ csdl hoặc hệ thống lưu trữ
+- PasswordEncoder : Giúp mã hóa và băm mật khẩu
+- SecurityContext : Sau khi request được xác thực , đối tượng Authentication sẽ được lưu trữ ở luồng cục bộ SecurityContext được quản lý bởi SecurityContextHolder.
+Giúp xử lý các yêu cầu tiếp theo từ cùng người dùng
+
+- Từ phiên bản Spring Security 6.3 trở đi, có thể kiểm tra mật khẩu liệu có bị xâm phạm hay không (mật khẩu quá đơn giản, dễ đoán) bằng cách sử dụng 
+triển khai của interface CompromisedPasswordChecker
+
+- Interface UserDetailsService có nhiệm vụ tải thông tin chi tiết của người dùng dựa theo username từ hệ thống lưu trữ trong bộ nhớ hoặc từ csdl - loadUserByUsername(String username)
+- Interface UserDetailsManager là 1 triển khai của interface UserDetailsService , có nhiều phương pháp khác nhau như tạo mới, cập nhật, xóa, thay đổi mk, kiểm tra tồn tại user
+-> UserDetailsService chỉ đơn giản có nhiệm vụ là tải và xác thực thông tin người dùng , trong khi đó UserDetailsManager hỗ trợ các phương thức CRUD cho người dùng
+
+* Encryption
+- Symmetric encryption (mã hóa đối xứng) sử dụng cùng 1 khóa để mã hóa và giải mã dữ liệu. Một số thuật toán mã hóa đối xứng như AES, Triple DES, Blowfish,...
+- Asymmetric encryption (mã hóa bất đối xứng) gồm 2 khóa mã hóa và giải mã public ky và private key. Public key được phân phối rộng rãi trong khi private key được giữ bí mật. 
+Một số thuật toán thường dùng là RSA, Diffie-Hellman, Elliptic Curve Cryptography (ECC), PGP.
+-> Bảo mật cao cho việc mã hóa dữ liệu trong quá trình truyền tải
+
+* Hashing Password 
+- Hàm băm nhận dữ liệu làm đầu vào và trả về 1 chuỗi byte duy nhất có độ dài cố định (246 bit cho SHA-256)
+- Với cùng 1 dữ liệu đầu vào thì hàm băm luôn tạo ra cùng 1 chuỗi byte
+- Dữ liệu băm không thể bị đảo ngược về dữ liệu gốc
+- Khi đăng nhập, người dùng nhập mật khẩu gốc. Sau đó sẽ thực hiện so sánh với hashing password được lưu trong csdl, nếu khớp với nhau thì người dùng được cấp quyền truy cập
+
+Vấn đề của Hashing Password
+- Kẻ tấn công truy cập vào các mật khẩu đã băm trong csdl, thực hiện tấn công brute force hoặc tìm kiếm toàn diện (exhaustive search trên bảng Rainbow) bằng cách
+thứ tất cả các mật khẩu có thể
+- Các hàm băm nhanh nên kẻ tấn công có thể thực hiện việc thử nhiều mật khẩu mỗi giây để thực hiện tấn công brute force
+- Brute Force Attack là 1 phương pháp bẻ khóa phổ biến dựa trên việc đoán username và password để truy cập trái phép vào hệ thống. Hacker sẽ thử và sai để cố gắng đoán thông tin đăng nhập hợp lệ
+- Rainbow Table Attack là phương pháp tính toán trước và lưu trữ 1 số lượng lớn các mật khẩu hashing cùng với các mật khẩu gốc tương ứng trong 1 bảng được gọi là bảng Rainbow hoặc bảng Dictionary
+
+Giải pháp 
+- Để ngăn chặn Raibow Table Attack thì sử dụng Salts. Salts là các giá trị độc nhất cho mỗi người dùng và được công khai. Salts được bao gồm ở đầu chuỗi hash cùng mật khẩu đã băm
+-> Mật khẩu gốc giống nhau sẽ không có chung giá trị hash trả về
+- Để ngăn chặn Brute Force Attack có thể sử dụng các thuật toán băm mật khẩu như PBKDF2, Bcrypt, Scrypt, Argon2. Những thuật toán này làm chậm quá trình băm mật khẩu nhưng sẽ yêu cầu
+nhiều tài nguyên CPU và bộ nhớ. Đối với người dùng thì k nên đặt password quá dễ đoán (tên, ngày sinh, ..) , đảm bảo mật khẩu đủ độ dài và ký tự cần thiết
+
+* Các triển khai của PasswordEncoder
+- NoOpPasswordEncoder : Không bảo mật vì không mã hóa mật khẩu, giữ nguyên mật khẩu gốc. Dễ bị lộ thông tin
+- StandardPasswordEncoder : Ít bảo mật hơn vì sử dụng SHA-256 nhưng không chống lại được Brute Force Attack và Rainbow Table Attack do ngày nay với sự tiến bộ CPU và GPU 
+thì hacker dễ dàng bẻ khóa mật khẩu
+- Pbkdf2PasswordEncoder : Bảo mật vì sử dụng thuật toán băm mật khẩu PBKDF2 gồm salt (độ dài 16 bytes) và nhiều vòng lặp (mặc định 310000 lần). 
+Salt ngăn chặn Rainbow Table Attack còn nhiều vòng lặp nhằm làm chậm quá trình Brute Force Attack
+- BCryptPasswordEncoder : Rất bảo mật vì sử dụng thuật toán băm mật khẩu Bcrypt gồm tích hợp salt ngẫu nhiên và điều chỉnh số vòng lặp.
+Salt ngăn chặn Rainbow Table Attack còn nhiều vòng lặp nhằm làm chậm quá trình Brute Force Attack
+- SCryptPasswordEncoder : Bảo mật cao vì sử dụng thuật toán băm mật khẩu Scrypt. Ngoài salt và nhiều vòng lặp, SCrypt còn tiêu tốn nhiều bộ nhớ làm cho các cuộc tấn công phần cứng (GPU)
+trở nên khó khăn hơn
+- Argon2PasswordEncoder : Bảo mật rất cao do được thiết kế để kháng tấn công hardware mạnh mẽ, có thể điều chỉnh tiêu thụ bộ nhớ và thời gian tính toán theo nhu cầu, rất hiệu quả chống lại brute force.
