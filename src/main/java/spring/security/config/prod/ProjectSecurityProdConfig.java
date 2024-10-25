@@ -14,6 +14,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.password.HaveIBeenPwnedRestApiPasswordChecker;
+import spring.security.exception.handling.CustomAccessDeniedHandler;
+import spring.security.exception.handling.CustomBasicAuthenticationEntryPoint;
 import static org.springframework.security.config.Customizer.withDefaults;
 
 @Configuration
@@ -23,12 +25,15 @@ public class ProjectSecurityProdConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http
+                .sessionManagement(smc -> smc.invalidSessionUrl("/invalidSession").maximumSessions(1))
+                .requiresChannel(rcc -> rcc.anyRequest().requiresInsecure()) // Only HTTP
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests((requests) -> requests
                         .requestMatchers("/myAccount", "/myLoans", "/myCards", "/myBalance").authenticated()
                         .requestMatchers( "/notices", "/contact", "/error", "/register").permitAll())
                 .formLogin(withDefaults())
-                .httpBasic(withDefaults())
+                .httpBasic(hbc -> hbc.authenticationEntryPoint(new CustomBasicAuthenticationEntryPoint()))
+                .exceptionHandling(ehc -> ehc.accessDeniedHandler(new CustomAccessDeniedHandler()))
                 .build();
     }
 
