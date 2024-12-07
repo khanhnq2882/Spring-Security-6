@@ -1,56 +1,52 @@
 package spring.security.config;
 
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Profile;
 import org.springframework.security.authentication.password.CompromisedPasswordChecker;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.password.HaveIBeenPwnedRestApiPasswordChecker;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
 import spring.security.exception.handling.CustomAccessDeniedHandler;
 import spring.security.exception.handling.CustomBasicAuthenticationEntryPoint;
-import spring.security.handler.CustomAuthenticationFailureHandler;
-import spring.security.handler.CustomAuthenticationSuccessHandler;
+import java.util.Collections;
+import static org.springframework.security.config.Customizer.withDefaults;
 
 @Configuration
-@Profile("!prod")
 public class ProjectSecurityConfig {
 
-    private final CustomAuthenticationSuccessHandler authenticationSuccessHandler;
-    private final CustomAuthenticationFailureHandler authenticationFailureHandler;
-
-    public ProjectSecurityConfig(CustomAuthenticationSuccessHandler authenticationSuccessHandler, CustomAuthenticationFailureHandler authenticationFailureHandler) {
-        this.authenticationSuccessHandler = authenticationSuccessHandler;
-        this.authenticationFailureHandler = authenticationFailureHandler;
-    }
-
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http) throws Exception{
+        CsrfTokenRequestAttributeHandler csrfTokenRequestAttributeHandler = new CsrfTokenRequestAttributeHandler();
+        csrfTokenRequestAttributeHandler.setCsrfRequestAttributeName("_csrf");
         return http
-                .sessionManagement(smc -> smc.invalidSessionUrl("/invalidSession").maximumSessions(5).maxSessionsPreventsLogin(true).expiredUrl("/expireUrl"))
-                .requiresChannel(rcc -> rcc.anyRequest().requiresInsecure()) // Only HTTP
-                .csrf(AbstractHttpConfigurer::disable)
+                .cors(corsCustomizer -> corsCustomizer.configurationSource(new CorsConfigurationSource() {
+                    @Override
+                    public CorsConfiguration getCorsConfiguration(HttpServletRequest request) {
+                        CorsConfiguration config = new CorsConfiguration();
+                        config.setAllowedOrigins(Collections.singletonList("http://localhost:4200"));
+                        config.setAllowedMethods(Collections.singletonList("*"));
+                        config.setAllowCredentials(true);
+                        config.setAllowedHeaders(Collections.singletonList("*"));
+                        config.setMaxAge(3600L);
+                        return config;
+                    }
+                }))
+                .csrf(csrfConfig -> csrfConfig.csrfTokenRequestHandler(csrfTokenRequestAttributeHandler)
+                        .ignoringRequestMatchers( "/contact","/register")
+                        .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse()))
+                .requiresChannel(rcf -> rcf.anyRequest().requiresInsecure())
                 .authorizeHttpRequests((requests) -> requests
-                        .requestMatchers("/myAccount", "/myLoans", "/myCards", "/myBalance", "/home").authenticated()
-                        .requestMatchers( "/notices", "/contact", "/error", "/register", "/invalidSession", "/login").permitAll())
-                .formLogin(flc -> flc
-                        .loginPage("/login")
-                        .usernameParameter("email")
-                        .passwordParameter("password")
-                        .defaultSuccessUrl("/home")
-                        .failureUrl("/login?error=true")
-                        .successHandler(authenticationSuccessHandler)
-                        .failureHandler(authenticationFailureHandler)
+                        .requestMatchers("/myAccount", "/myBalance", "/myLoans", "/myCards", "/user").authenticated()
+                        .requestMatchers( "/notices", "/contact", "/error", "/register", "/invalidSession").permitAll()
                 )
-                .logout(loc -> loc
-                        .logoutSuccessUrl("/login?logout=true")
-                        .invalidateHttpSession(true)
-                        .clearAuthentication(true)
-                        .deleteCookies("JSESSIONID")
-                )
+                .formLogin(withDefaults())
                 .httpBasic(hbc -> hbc.authenticationEntryPoint(new CustomBasicAuthenticationEntryPoint()))
                 .exceptionHandling(ehc -> ehc.accessDeniedHandler(new CustomAccessDeniedHandler()))
                 .build();
@@ -65,5 +61,6 @@ public class ProjectSecurityConfig {
     public CompromisedPasswordChecker compromisedPasswordChecker() {
         return new HaveIBeenPwnedRestApiPasswordChecker();
     }
+
 
 }
